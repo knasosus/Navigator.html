@@ -385,14 +385,55 @@
         }
         
         // Построение маршрута (упрощенное, без реального API)
-        routeBtn.addEventListener('click', () => {
-            const start = document.getElementById('startPoint').value;
-            const end = document.getElementById('endPoint').value;
-            
-            if (!start || !end) {
-                showStatus('Введите точки начала и конца маршрута', 'error');
-                return;
-            }
+        routeBtn.addEventListener('click', async () => {
+    const startText = startPoint.value;
+    const endText = endPoint.value;
+
+    if (!startText || !endText) {
+        showStatus('Введите адреса', 'error');
+        return;
+    }
+
+    try {
+        const start = await geocode(startText);
+        const end = await geocode(endText);
+
+        const route1 = await getRoute(start, end);
+
+        const hitZone = routeHitsBlockedZone(route1);
+
+        let finalRoute = route1;
+
+        if (hitZone) {
+            showStatus(`Обнаружена зона "${hitZone.name}", строим обход`, 'warning');
+
+            const bypass = generateBypassPoint(hitZone, start, end);
+
+            const part1 = await getRoute(start, bypass);
+            const part2 = await getRoute(bypass, end);
+
+            finalRoute = [...part1, ...part2];
+        }
+
+        if (currentRoute) map.removeLayer(currentRoute);
+
+        currentRoute = L.polyline(finalRoute, {
+            color: 'blue',
+            weight: 5
+        }).addTo(map);
+
+        map.fitBounds(currentRoute.getBounds());
+
+        L.marker([start.lat, start.lng]).addTo(map).bindPopup('Начало');
+        L.marker([end.lat, end.lng]).addTo(map).bindPopup('Конец');
+
+        showStatus('Маршрут построен с обходом зон', 'success');
+
+    } catch (e) {
+        console.error(e);
+        showStatus('Ошибка маршрута', 'error');
+    }
+});
             
             // Очищаем предыдущий маршрут
             if (currentRoute) {
@@ -560,6 +601,40 @@
         // Инициализация
         updateZonesList();
         showStatus('Навигатор загружен. Добавьте запретные зоны или постройте маршрут.', 'info');
+        function lineIntersectsCircle(line, center, radius) {
+    for (let i = 0; i < line.length; i++) {
+        const d = map.distance(line[i], center);
+        if (d < radius) return true;
+    }
+    return false;
+}
+
+function routeHitsBlockedZone(routeCoords) {
+    for (const zone of blockedZones) {
+        if (zone.type === 'circle') {
+            if (lineIntersectsCircle(routeCoords, zone.center, zone.radius)) {
+                return zone;
+            }
+        }
+    }
+    return null;
+}
+        function generateBypassPoint(zone, start, end) {
+    const angle = Math.atan2(
+        end.lat - zone.center.lat,
+        end.lng - zone.center.lng
+    );
+
+    const offset = zone.radius + 300; // 300 м запас
+
+    const latOffset = (offset / 111320) * Math.sin(angle + Math.PI / 2);
+    const lngOffset = (offset / 111320) * Math.cos(angle + Math.PI / 2);
+
+    return {
+        lat: zone.center.lat + latOffset,
+        lng: zone.center.lng + lngOffset
+    };
+        }
     </script>
 </body>
 </html>
