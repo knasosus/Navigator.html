@@ -399,9 +399,60 @@
                 map.removeLayer(currentRoute);
             }
             
-            // Упрощенный маршрут (прямая линия между случайными точками)
-            const startPoint = [55.7558 + (Math.random() - 0.5) * 0.1, 37.6173 + (Math.random() - 0.5) * 0.1];
-            const endPoint = [55.7558 + (Math.random() - 0.5) * 0.1, 37.6173 + (Math.random() - 0.5) * 0.1];
+            routeBtn.addEventListener('click', async () => {
+    const startText = document.getElementById('startPoint').value;
+    const endText = document.getElementById('endPoint').value;
+
+    if (!startText || !endText) {
+        showStatus('Введите адрес начала и конца', 'error');
+        return;
+    }
+
+    try {
+        // 1. Геокодирование (адрес → координаты)
+        const start = await geocode(startText);
+        const end = await geocode(endText);
+
+        if (currentRoute) {
+            map.removeLayer(currentRoute);
+        }
+
+        // 2. Запрос маршрута OSRM
+        const url = `https://router.project-osrm.org/route/v1/driving/` +
+            `${start.lng},${start.lat};${end.lng},${end.lat}` +
+            `?overview=full&geometries=geojson`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.routes || !data.routes.length) {
+            showStatus('Маршрут не найден', 'error');
+            return;
+        }
+
+        const routeCoords = data.routes[0].geometry.coordinates.map(
+            c => [c[1], c[0]]
+        );
+
+        // 3. Отрисовка маршрута
+        currentRoute = L.polyline(routeCoords, {
+            color: 'blue',
+            weight: 5
+        }).addTo(map);
+
+        L.marker([start.lat, start.lng]).addTo(map).bindPopup('Начало');
+        L.marker([end.lat, end.lng]).addTo(map).bindPopup('Конец');
+
+        map.fitBounds(currentRoute.getBounds());
+
+        showStatus('Маршрут построен', 'success');
+
+    } catch (e) {
+        showStatus('Ошибка построения маршрута', 'error');
+        console.error(e);
+    }
+});
+            
             
             // Проверяем, проходит ли маршрут через запретные зоны
             const routeLine = [startPoint, endPoint];
@@ -465,6 +516,22 @@
                 blockedZones = JSON.parse(savedZones);
                 blockedZones.forEach(zone => {
                     renderZoneOnMap(zone);
+                    async function geocode(query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+        headers: { 'User-Agent': 'NavigatorApp' }
+    });
+    const data = await res.json();
+
+    if (!data.length) {
+        throw new Error('Адрес не найден');
+    }
+
+    return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
+    };
+                    }
                 });
                 updateZonesList();
             }
