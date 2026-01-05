@@ -1,28 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Навигатор с блокировкой зон</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        * {
+        html, body {
+            height: 100%;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
+
         #container {
             display: flex;
-            height: 100vh;
+            height: 100%;
         }
-        
+
         #map {
             flex: 3;
+            min-height: 400px; /* гарантирует видимость карты */
         }
-        
+
         #sidebar {
             flex: 1;
             background: #f5f5f5;
@@ -30,7 +32,7 @@
             border-left: 1px solid #ddd;
             overflow-y: auto;
         }
-        
+
         .control-panel {
             background: white;
             padding: 15px;
@@ -38,17 +40,17 @@
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
+
         h2 {
             margin-bottom: 15px;
             color: #333;
         }
-        
+
         h3 {
             margin: 15px 0 10px 0;
             color: #555;
         }
-        
+
         button {
             background: #4CAF50;
             color: white;
@@ -59,27 +61,27 @@
             margin: 5px;
             transition: background 0.3s;
         }
-        
+
         button:hover {
             background: #45a049;
         }
-        
+
         button.secondary {
             background: #2196F3;
         }
-        
+
         button.secondary:hover {
             background: #0b7dda;
         }
-        
+
         button.danger {
             background: #f44336;
         }
-        
+
         button.danger:hover {
             background: #d32f2f;
         }
-        
+
         .blocked-zone {
             background: #ffebee;
             padding: 10px;
@@ -87,7 +89,7 @@
             border-radius: 4px;
             border-left: 4px solid #f44336;
         }
-        
+
         input {
             width: 100%;
             padding: 8px;
@@ -95,25 +97,24 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        
+
         .zone-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .zone-name {
             font-weight: bold;
         }
-        
+
         .zone-radius {
             color: #666;
             font-size: 0.9em;
         }
-        
+
         #status {
             padding: 10px;
-            background: #e3f2fd;
             border-radius: 4px;
             margin-top: 10px;
             display: none;
@@ -121,520 +122,189 @@
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="map"></div>
-        <div id="sidebar">
-            <div class="control-panel">
-                <h2>Навигатор с блокировкой зон</h2>
-                <button id="locateBtn">📍 Моё местоположение</button>
-                <button id="addZoneBtn" class="secondary">➕ Добавить запретную зону</button>
-                
-                <div id="status"></div>
-            </div>
-            
-            <div class="control-panel">
-                <h3>Запретные зоны</h3>
-                <div id="zonesList">
-                    <!-- Список зон будет добавляться здесь -->
-                </div>
-            </div>
-            
-            <div class="control-panel">
-                <h3>Поиск маршрута</h3>
-                <input type="text" id="startPoint" placeholder="Откуда (ваше местоположение)">
-                <input type="text" id="endPoint" placeholder="Куда (адрес назначения)">
-                <button id="routeBtn" class="secondary">🗺️ Построить маршрут</button>
-                <button id="clearRouteBtn">Очистить маршрут</button>
-            </div>
-            
-            <div class="control-panel">
-                <h3>Режим рисования зон</h3>
-                <p>Нажмите "Добавить зону", затем кликайте на карте для создания многоугольника</p>
-                <button id="drawPolygonBtn" class="secondary">🎯 Нарисовать многоугольник</button>
-                <button id="cancelDrawingBtn" class="danger">Отменить рисование</button>
-            </div>
+<div id="container">
+    <div id="map"></div>
+    <div id="sidebar">
+        <div class="control-panel">
+            <h2>Навигатор с блокировкой зон</h2>
+            <button id="locateBtn">📍 Моё местоположение</button>
+            <button id="addZoneBtn" class="secondary">➕ Добавить запретную зону</button>
+            <div id="status"></div>
+        </div>
+
+        <div class="control-panel">
+            <h3>Запретные зоны</h3>
+            <div id="zonesList"></div>
+        </div>
+
+        <div class="control-panel">
+            <h3>Поиск маршрута</h3>
+            <input type="text" id="startPoint" placeholder="Откуда (ваше местоположение)">
+            <input type="text" id="endPoint" placeholder="Куда (адрес назначения)">
+            <button id="routeBtn" class="secondary">🗺️ Построить маршрут</button>
+            <button id="clearRouteBtn">Очистить маршрут</button>
+        </div>
+
+        <div class="control-panel">
+            <h3>Режим рисования зон</h3>
+            <p>Нажмите "Добавить зону", затем кликайте на карте для создания многоугольника</p>
+            <button id="drawPolygonBtn" class="secondary">🎯 Нарисовать многоугольник</button>
+            <button id="cancelDrawingBtn" class="danger">Отменить рисование</button>
         </div>
     </div>
+</div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // Инициализация карты
-        const map = L.map('map').setView([55.7558, 37.6173], 12); // Москва по умолчанию
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-        
-        // Переменные для управления
-        let blockedZones = [];
-        let currentRoute = null;
-        let isDrawing = false;
-        let drawnItems = new L.FeatureGroup();
-        let currentPolygon = null;
-        map.addLayer(drawnItems);
-        
-        // Загружаем зоны из localStorage
-        loadZones();
-        
-        // Элементы интерфейса
-        const locateBtn = document.getElementById('locateBtn');
-        const addZoneBtn = document.getElementById('addZoneBtn');
-        const routeBtn = document.getElementById('routeBtn');
-        const clearRouteBtn = document.getElementById('clearRouteBtn');
-        const drawPolygonBtn = document.getElementById('drawPolygonBtn');
-        const cancelDrawingBtn = document.getElementById('cancelDrawingBtn');
-        const zonesList = document.getElementById('zonesList');
-        const status = document.getElementById('status');
-        
-        // Определение местоположения
-        locateBtn.addEventListener('click', () => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        map.setView([lat, lng], 15);
-                        
-                        // Добавляем маркер
-                        L.marker([lat, lng])
-                            .addTo(map)
-                            .bindPopup('Ваше местоположение')
-                            .openPopup();
-                        
-                        showStatus('Ваше местоположение определено', 'success');
-                    },
-                    (error) => {
-                        showStatus('Не удалось определить местоположение', 'error');
-                    }
-                );
-            }
-        });
-        
-        // Добавление запретной зоны (круг)
-        addZoneBtn.addEventListener('click', () => {
-            const zoneName = prompt('Введите название запретной зоны:', 'Запретная зона');
-            if (!zoneName) return;
-            
-            const radius = prompt('Введите радиус зоны в метрах:', '500');
-            if (!radius || isNaN(radius)) return;
-            
-            // Просим пользователя кликнуть на карте
-            showStatus('Кликните на карте, чтобы разместить запретную зону', 'info');
-            
-            const clickHandler = (e) => {
-                const center = e.latlng;
-                const zone = {
-                    id: Date.now(),
-                    name: zoneName,
-                    center: center,
-                    radius: parseInt(radius),
-                    type: 'circle'
-                };
-                
-                addBlockedZone(zone);
-                map.off('click', clickHandler);
-                showStatus(`Зона "${zoneName}" добавлена`, 'success');
-            };
-            
-            map.on('click', clickHandler);
-        });
-        
-        // Режим рисования многоугольника
-        let polygonPoints = [];
-        
-        drawPolygonBtn.addEventListener('click', () => {
-            isDrawing = true;
-            polygonPoints = [];
-            showStatus('Кликайте на карте для создания вершин многоугольника. Дважды кликните для завершения.', 'info');
-            
-            const clickHandler = (e) => {
-                if (!isDrawing) return;
-                
-                polygonPoints.push(e.latlng);
-                
-                if (currentPolygon) {
-                    map.removeLayer(currentPolygon);
-                }
-                
-                if (polygonPoints.length > 1) {
-                    currentPolygon = L.polygon(polygonPoints, {
-                        color: 'red',
-                        fillColor: '#f03',
-                        fillOpacity: 0.3
-                    }).addTo(map);
-                }
-                
-                // Добавляем маркеры точек
-                L.circleMarker(e.latlng, {
-                    radius: 5,
-                    color: 'red'
-                }).addTo(map);
-            };
-            
-            const dblClickHandler = () => {
-                if (polygonPoints.length < 3) {
-                    showStatus('Для создания многоугольника нужно как минимум 3 точки', 'error');
-                    return;
-                }
-                
-                const zoneName = prompt('Введите название запретной зоны:', 'Запретная зона');
-                if (!zoneName) return;
-                
-                const zone = {
-                    id: Date.now(),
-                    name: zoneName,
-                    points: [...polygonPoints],
-                    type: 'polygon'
-                };
-                
-                addBlockedZone(zone);
-                isDrawing = false;
-                polygonPoints = [];
-                if (currentPolygon) {
-                    map.removeLayer(currentPolygon);
-                    currentPolygon = null;
-                }
-                
-                map.off('click', clickHandler);
-                map.off('dblclick', dblClickHandler);
-                showStatus(`Зона "${zoneName}" добавлена`, 'success');
-            };
-            
-            map.on('click', clickHandler);
-            map.on('dblclick', dblClickHandler);
-        });
-        
-        cancelDrawingBtn.addEventListener('click', () => {
-            isDrawing = false;
-            polygonPoints = [];
-            if (currentPolygon) {
-                map.removeLayer(currentPolygon);
-                currentPolygon = null;
-            }
-            showStatus('Рисование отменено', 'warning');
-        });
-        
-        // Функция добавления запретной зоны
-        function addBlockedZone(zone) {
-            blockedZones.push(zone);
-            saveZones();
-            renderZoneOnMap(zone);
-            updateZonesList();
-        }
-        
-        // Визуализация зоны на карте
-        function renderZoneOnMap(zone) {
-            let layer;
-            
-            if (zone.type === 'circle') {
-                layer = L.circle(zone.center, {
-                    radius: zone.radius,
-                    color: 'red',
-                    fillColor: '#f03',
-                    fillOpacity: 0.3
-                }).addTo(map);
-            } else if (zone.type === 'polygon') {
-                layer = L.polygon(zone.points, {
-                    color: 'red',
-                    fillColor: '#f03',
-                    fillOpacity: 0.3
-                }).addTo(map);
-            }
-            
-            layer.bindPopup(`
-                <strong>${zone.name}</strong><br>
-                ${zone.type === 'circle' ? `Радиус: ${zone.radius}м` : 'Многоугольная зона'}<br>
-                <button onclick="removeZone(${zone.id})">Удалить</button>
-            `);
-            
-            zone.layer = layer;
-        }
-        
-        // Удаление зоны (глобальная функция для вызова из попапа)
-        window.removeZone = function(id) {
-            const index = blockedZones.findIndex(zone => zone.id === id);
-            if (index !== -1) {
-                map.removeLayer(blockedZones[index].layer);
-                blockedZones.splice(index, 1);
-                saveZones();
-                updateZonesList();
-                showStatus('Зона удалена', 'warning');
-            }
-        };
-        
-        // Обновление списка зон в сайдбаре
-        function updateZonesList() {
-            zonesList.innerHTML = '';
-            
-            blockedZones.forEach(zone => {
-                const zoneDiv = document.createElement('div');
-                zoneDiv.className = 'blocked-zone';
-                zoneDiv.innerHTML = `
-                    <div class="zone-info">
-                        <div>
-                            <div class="zone-name">${zone.name}</div>
-                            <div class="zone-radius">
-                                ${zone.type === 'circle' ? `Круг, радиус: ${zone.radius}м` : 'Многоугольник'}
-                            </div>
-                        </div>
-                        <button class="danger" onclick="removeZone(${zone.id})">✕</button>
-                    </div>
-                `;
-                zonesList.appendChild(zoneDiv);
-            });
-        }
-        
-        // Построение маршрута (упрощенное, без реального API)
-        routeBtn.addEventListener('click', async () => {
-    const startText = startPoint.value;
-    const endText = endPoint.value;
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // ================== КАРТА ==================
+    const map = L.map('map').setView([50.4501, 30.5234], 12); // Киев
+    map.invalidateSize();
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-    if (!startText || !endText) {
-        showStatus('Введите адреса', 'error');
-        return;
+    let blockedZones = [];
+    let currentRoute = null;
+
+    // ================== UI ==================
+    const locateBtn = document.getElementById('locateBtn');
+    const addZoneBtn = document.getElementById('addZoneBtn');
+    const drawPolygonBtn = document.getElementById('drawPolygonBtn');
+    const cancelDrawingBtn = document.getElementById('cancelDrawingBtn');
+    const routeBtn = document.getElementById('routeBtn');
+    const clearRouteBtn = document.getElementById('clearRouteBtn');
+    const startInput = document.getElementById('startPoint');
+    const endInput = document.getElementById('endPoint');
+    const zonesList = document.getElementById('zonesList');
+    const status = document.getElementById('status');
+
+    // ================== GEO ==================
+    async function geocode(query) {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'NavigatorApp' }});
+        const data = await res.json();
+        if (!data.length) throw new Error('Адрес не найден');
+        return { lat: +data[0].lat, lng: +data[0].lon };
     }
 
-    try {
-        const start = await geocode(startText);
-        const end = await geocode(endText);
-
-        const route1 = await getRoute(start, end);
-
-        const hitZone = routeHitsBlockedZone(route1);
-
-        let finalRoute = route1;
-
-        if (hitZone) {
-            showStatus(`Обнаружена зона "${hitZone.name}", строим обход`, 'warning');
-
-            const bypass = generateBypassPoint(hitZone, start, end);
-
-            const part1 = await getRoute(start, bypass);
-            const part2 = await getRoute(bypass, end);
-
-            finalRoute = [...part1, ...part2];
-        }
-
-        if (currentRoute) map.removeLayer(currentRoute);
-
-        currentRoute = L.polyline(finalRoute, {
-            color: 'blue',
-            weight: 5
-        }).addTo(map);
-
-        map.fitBounds(currentRoute.getBounds());
-
-        L.marker([start.lat, start.lng]).addTo(map).bindPopup('Начало');
-        L.marker([end.lat, end.lng]).addTo(map).bindPopup('Конец');
-
-        showStatus('Маршрут построен с обходом зон', 'success');
-
-    } catch (e) {
-        console.error(e);
-        showStatus('Ошибка маршрута', 'error');
-    }
-});
-            
-            // Очищаем предыдущий маршрут
-            if (currentRoute) {
-                map.removeLayer(currentRoute);
-            }
-            
-            routeBtn.addEventListener('click', async () => {
-    const startText = document.getElementById('startPoint').value;
-    const endText = document.getElementById('endPoint').value;
-
-    if (!startText || !endText) {
-        showStatus('Введите адрес начала и конца', 'error');
-        return;
-    }
-
-    try {
-        // 1. Геокодирование (адрес → координаты)
-        const start = await geocode(startText);
-        const end = await geocode(endText);
-
-        if (currentRoute) {
-            map.removeLayer(currentRoute);
-        }
-
-        // 2. Запрос маршрута OSRM
-        const url = `https://router.project-osrm.org/route/v1/driving/` +
-            `${start.lng},${start.lat};${end.lng},${end.lat}` +
-            `?overview=full&geometries=geojson`;
-
+    async function getRoute(a, b) {
+        const url = `https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
         const res = await fetch(url);
         const data = await res.json();
-
-        if (!data.routes || !data.routes.length) {
-            showStatus('Маршрут не найден', 'error');
-            return;
-        }
-
-        const routeCoords = data.routes[0].geometry.coordinates.map(
-            c => [c[1], c[0]]
-        );
-
-        // 3. Отрисовка маршрута
-        currentRoute = L.polyline(routeCoords, {
-            color: 'blue',
-            weight: 5
-        }).addTo(map);
-
-        L.marker([start.lat, start.lng]).addTo(map).bindPopup('Начало');
-        L.marker([end.lat, end.lng]).addTo(map).bindPopup('Конец');
-
-        map.fitBounds(currentRoute.getBounds());
-
-        showStatus('Маршрут построен', 'success');
-
-    } catch (e) {
-        showStatus('Ошибка построения маршрута', 'error');
-        console.error(e);
+        if (!data.routes.length) throw new Error('Маршрут не найден');
+        return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
     }
-});
-            
-            
-            // Проверяем, проходит ли маршрут через запретные зоны
-            const routeLine = [startPoint, endPoint];
-            let passesThroughBlockedZone = false;
-            
-            // Простая проверка пересечения
-            blockedZones.forEach(zone => {
-                if (zone.type === 'circle') {
-                    // Упрощенная проверка расстояния
-                    const dist = map.distance(startPoint, zone.center);
-                    if (dist < zone.radius) {
-                        passesThroughBlockedZone = true;
-                    }
-                }
-            });
-            
-            // Рисуем маршрут
-            currentRoute = L.polyline(routeLine, {
-                color: passesThroughBlockedZone ? 'orange' : 'blue',
-                weight: 4,
-                opacity: 0.7
-            }).addTo(map);
-            
-            if (passesThroughBlockedZone) {
-                showStatus('⚠️ Маршрут проходит через запретную зону!', 'warning');
-            } else {
-                showStatus('Маршрут построен (безопасный)', 'success');
+
+    // ================== ОБХОД ЗОН ==================
+    function lineIntersectsCircle(line, center, radius) {
+        return line.some(p => map.distance(p, center) < radius);
+    }
+
+    function routeHitsBlockedZone(route) {
+        return blockedZones.find(z => z.type === 'circle' && lineIntersectsCircle(route, z.center, z.radius));
+    }
+
+    function generateBypassPoint(zone) {
+        const angle = Math.random() * Math.PI * 2;
+        const offset = zone.radius + 400;
+        return {
+            lat: zone.center.lat + (offset / 111320) * Math.sin(angle),
+            lng: zone.center.lng + (offset / 111320) * Math.cos(angle)
+        };
+    }
+
+    // ================== МАРШРУТ ==================
+    routeBtn.addEventListener('click', async () => {
+        try {
+            const start = await geocode(startInput.value);
+            const end = await geocode(endInput.value);
+
+            let route = await getRoute(start, end);
+            const zone = routeHitsBlockedZone(route);
+
+            if (zone) {
+                showStatus(`Обход зоны: ${zone.name}`, 'warning');
+                const bypass = generateBypassPoint(zone);
+                const r1 = await getRoute(start, bypass);
+                const r2 = await getRoute(bypass, end);
+                route = [...r1, ...r2];
             }
-            
-            // Добавляем маркеры
-            L.marker(startPoint).addTo(map).bindPopup('Начало');
-            L.marker(endPoint).addTo(map).bindPopup('Конец');
-            
-            // Центрируем карту на маршруте
-            const bounds = L.latLngBounds([startPoint, endPoint]);
-            map.fitBounds(bounds);
-        });
-        
-        clearRouteBtn.addEventListener('click', () => {
-            if (currentRoute) {
-                map.removeLayer(currentRoute);
-                currentRoute = null;
-            }
-            document.getElementById('startPoint').value = '';
-            document.getElementById('endPoint').value = '';
-            showStatus('Маршрут очищен', 'info');
-        });
-        
-        // Сохранение/загрузка из localStorage
-        function saveZones() {
-            const zonesToSave = blockedZones.map(zone => ({
-                ...zone,
-                layer: undefined // Убираем ссылку на слой карты
-            }));
-            localStorage.setItem('blockedZones', JSON.stringify(zonesToSave));
+
+            if (currentRoute) map.removeLayer(currentRoute);
+            currentRoute = L.polyline(route, { color: 'blue', weight: 5 }).addTo(map);
+            map.fitBounds(currentRoute.getBounds());
+
+            L.marker([start.lat, start.lng]).addTo(map).bindPopup('Начало');
+            L.marker([end.lat, end.lng]).addTo(map).bindPopup('Конец');
+
+            showStatus('Маршрут построен', 'success');
+        } catch (e) {
+            console.error(e);
+            showStatus('Ошибка маршрута', 'error');
         }
-        
-        function loadZones() {
-            const savedZones = localStorage.getItem('blockedZones');
-            if (savedZones) {
-                blockedZones = JSON.parse(savedZones);
-                blockedZones.forEach(zone => {
-                    renderZoneOnMap(zone);
-                    async function geocode(query) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
-    const res = await fetch(url, {
-        headers: { 'User-Agent': 'NavigatorApp' }
     });
-    const data = await res.json();
 
-    if (!data.length) {
-        throw new Error('Адрес не найден');
+    clearRouteBtn.addEventListener('click', () => {
+        if (currentRoute) map.removeLayer(currentRoute);
+        startInput.value = '';
+        endInput.value = '';
+    });
+
+    // ================== СТАТУС ==================
+    function showStatus(msg, type) {
+        status.textContent = msg;
+        status.style.display = 'block';
+        status.style.background =
+            type === 'success' ? '#d4edda' :
+            type === 'warning' ? '#fff3cd' :
+            '#f8d7da';
+        setTimeout(() => status.style.display = 'none', 3000);
     }
 
-    return {
-        lat: parseFloat(data[0].lat),
-        lng: parseFloat(data[0].lon)
-    };
-                    }
-                });
-                updateZonesList();
-            }
+    // ================== МЕСТОПОЛОЖЕНИЕ ==================
+    locateBtn.addEventListener('click', () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (p) => {
+                    const lat = p.coords.latitude;
+                    const lng = p.coords.longitude;
+                    map.setView([lat, lng], 15);
+                    L.marker([lat, lng]).addTo(map).bindPopup('Ваше местоположение').openPopup();
+                    showStatus('Местоположение определено', 'success');
+                },
+                () => showStatus('Не удалось определить местоположение', 'error')
+            );
         }
-        
-        // Функция показа статуса
-        function showStatus(message, type) {
-            status.textContent = message;
-            status.style.display = 'block';
-            status.style.background = 
-                type === 'success' ? '#d4edda' :
-                type === 'error' ? '#f8d7da' :
-                type === 'warning' ? '#fff3cd' :
-                '#d1ecf1';
-            status.style.color = 
-                type === 'success' ? '#155724' :
-                type === 'error' ? '#721c24' :
-                type === 'warning' ? '#856404' :
-                '#0c5460';
-            
-            setTimeout(() => {
-                status.style.display = 'none';
-            }, 3000);
-        }
-        
-        // Инициализация
+    });
+
+    // ================== ЗАПРЕТНЫЕ ЗОНЫ ==================
+    function addBlockedZone(zone) {
+        blockedZones.push(zone);
+        renderZoneOnMap(zone);
         updateZonesList();
-        showStatus('Навигатор загружен. Добавьте запретные зоны или постройте маршрут.', 'info');
-        function lineIntersectsCircle(line, center, radius) {
-    for (let i = 0; i < line.length; i++) {
-        const d = map.distance(line[i], center);
-        if (d < radius) return true;
     }
-    return false;
-}
 
-function routeHitsBlockedZone(routeCoords) {
-    for (const zone of blockedZones) {
+    function renderZoneOnMap(zone) {
+        let layer;
         if (zone.type === 'circle') {
-            if (lineIntersectsCircle(routeCoords, zone.center, zone.radius)) {
-                return zone;
-            }
+            layer = L.circle(zone.center, { radius: zone.radius, color: 'red', fillColor: '#f03', fillOpacity: 0.3 }).addTo(map);
+        } else if (zone.type === 'polygon') {
+            layer = L.polygon(zone.points, { color: 'red', fillColor: '#f03', fillOpacity: 0.3 }).addTo(map);
         }
+        layer.bindPopup(`<strong>${zone.name}</strong>`);
+        zone.layer = layer;
     }
-    return null;
-}
-        function generateBypassPoint(zone, start, end) {
-    const angle = Math.atan2(
-        end.lat - zone.center.lat,
-        end.lng - zone.center.lng
-    );
 
-    const offset = zone.radius + 300; // 300 м запас
+    function updateZonesList() {
+        zonesList.innerHTML = '';
+        blockedZones.forEach(zone => {
+            const div = document.createElement('div');
+            div.className = 'blocked-zone';
+            div.innerHTML = `<div class="zone-info"><div><div class="zone-name">${zone.name}</div></div></div>`;
+            zonesList.appendChild(div);
+        });
+    }
 
-    const latOffset = (offset / 111320) * Math.sin(angle + Math.PI / 2);
-    const lngOffset = (offset / 111320) * Math.cos(angle + Math.PI / 2);
-
-    return {
-        lat: zone.center.lat + latOffset,
-        lng: zone.center.lng + lngOffset
-    };
-        }
-    </script>
+</script>
 </body>
 </html>
