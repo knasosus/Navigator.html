@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Навигатор с запретными зонами</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+body, html {
+    margin: 0;
+    height: 100%;
+    font-family: Arial, sans-serif;
+}
+#map {
+    height: 100%;
+}
+#panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: white;
+    padding: 10px;
+    z-index: 1000;
+    border-radius: 6px;
+    width: 260px;
+}
+button {
+    width: 100%;
+    margin-top: 5px;
+    padding: 8px;
+}
+.zone {
+    background: #fee;
+    padding: 5px;
+    margin-top: 5px;
+    border-left: 4px solid red;
+}
+</style>
+</head>
+
+<body>
+
+<div id="panel">
+    <input id="start" placeholder="Откуда"><br>
+    <input id="end" placeholder="Куда"><br>
+
+    <button id="route">Построить маршрут</button>
+    <button id="addZone">Добавить запретную зону</button>
+
+    <div id="zones"></div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const map = L.map('map').setView([50.4501, 30.5234], 12);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+}).addTo(map);
+
+let blockedZones = [];
+let currentRoute = null;
+
+/* ---------------- GEO ---------------- */
+
+async function geocode(q) {
+    const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`
+    );
+    const data = await res.json();
+    if (!data.length) throw "Адрес не найден";
+    return { lat: +data[0].lat, lng: +data[0].lon };
+}
+
+/* ---------------- ZONES ---------------- */
+
+document.getElementById('addZone').onclick = () => {
+    alert("Кликни на карту для создания запретной зоны");
+    map.once('click', e => {
+        const radius = 400;
+        const zone = {
+            id: Date.now(),
+            center: e.latlng,
+            radius
+        };
+
+        zone.layer = L.circle(e.latlng, {
+            radius,
+            color: 'red',
+            fillOpacity: 0.3
+        }).addTo(map);
+
+        blockedZones.push(zone);
+        renderZones();
+    });
+};
+
+function renderZones() {
+    const list = document.getElementById('zones');
+    list.innerHTML = '';
+
+    blockedZones.forEach(z => {
+        const div = document.createElement('div');
+        div.className = 'zone';
+        div.innerHTML = `
+            Запретная зона
+            <button onclick="removeZone(${z.id})">Удалить</button>
+        `;
+        list.appendChild(div);
+    });
+}
+
+window.removeZone = id => {
+    const i = blockedZones.findIndex(z => z.id === id);
+    if (i === -1) return;
+    map.removeLayer(blockedZones[i].layer);
+    blockedZones.splice(i, 1);
+    renderZones();
+};
+
+/* ---------------- ROUTE ---------------- */
+
+async function getRouteGH(start, end) {
+    const avoid = blockedZones.map(z => {
+        const points = [];
+        const steps = 24;
+        for (let i = 0; i <= steps; i++) {
+            const a = i / steps * Math.PI * 2;
+            const lat = z.center.lat + (z.radius / 111320) * Math.sin(a);
+            const lng = z.center.lng + (z.radius / 111320) * Math.cos(a);
+            points.push([lng, lat]);
+        }
+        return [points];
+    });
+
+    const body = {
+        points: [[start.lng, start.lat], [end.lng, end.lat]],
+        profile: "car",
+        avoid_areas: {
+            type: "MultiPolygon",
+            coordinates: avoid
+        }
+    };
+
+    const res = await fetch("http://localhost:8989/route", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    if (!data.paths?.length) throw "Маршрут не найден";
+
+    return data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
+}
+
+document.getElementById('route').onclick = async () => {
+    try {
+        const start = await geocode(start.value);
+        const end = await geocode(end.value);
+
+        const coords = await getRouteGH(start, end);
+
+        if (currentRoute) map.removeLayer(currentRoute);
+
+        currentRoute = L.polyline(coords, {
+            color: 'blue',
+            weight: 5
+        }).addTo(map);
+
+        map.fitBounds(currentRoute.getBounds());
+
+    } catch (e) {
+        alert(e);
+        console.error(e);
+    }
+};
+</script>
+
+</body>
+</html>
