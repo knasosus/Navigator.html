@@ -82,7 +82,7 @@ async function geocode(q) {
 document.getElementById('addZone').onclick = () => {
     alert("Кликни на карту для создания запретной зоны");
     map.once('click', e => {
-        const radius = 400;
+        const radius = 50;
         const zone = {
             id: Date.now(),
             center: e.latlng,
